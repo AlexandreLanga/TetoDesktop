@@ -40,6 +40,7 @@ Antes de enviar alterações, execute:
 
 ```powershell
 py -m compileall -q app.py
+py -m unittest discover -s tests -v
 ```
 
-As mudanças devem preservar o contrato da API e o comportamento da interface. A arquitetura e os pontos de manutenção estão em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+As mudanças devem preservar o contrato da API e o comportamento da interface. A arquitetura, a divisão de responsabilidades e os pontos de manutenção estão em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
