@@ -21,8 +21,10 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, 
 
 
 API_DEFAULT = "http://127.0.0.1:8080/api/analyze"
+API_TIMEOUT_SECONDS = 180
 MAX_IMAGES = 3
 PREVIEW_SIZE = (310, 215)
+ANALYSES_DIRECTORY = "analises"
 SEVERITY_COLORS = {"ALTA": "#e53935", "MÉDIA": "#fb8c00", "MEDIA": "#fb8c00", "BAIXA": "#43a047"}
 ANNOTATION_PALETTE = ["#e53935", "#1e88e5", "#43a047", "#fb8c00", "#8e24aa", "#00acc1", "#fdd835", "#6d4c41"]
 
@@ -128,7 +130,7 @@ class RoofAnalyzerApp(tk.Tk):
                 # O contrato OpenAPI da TetoAPI exige vários uploads no campo "files".
                 files.append(("files", (path.name, handle, self._mime_type(path))))
             response = requests.post(
-                url, data={"prompt": prompt}, files=files, timeout=180
+                url, data={"prompt": prompt}, files=files, timeout=API_TIMEOUT_SECONDS
             )
             if not response.ok:
                 try:
@@ -176,14 +178,15 @@ class RoofAnalyzerApp(tk.Tk):
         self.status_var.set(status)
 
     def _create_annotations(self, payload: dict) -> list[Path]:
-        output_dir = Path.cwd() / "analises" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path.cwd() / ANALYSES_DIRECTORY / datetime.now().strftime("%Y%m%d_%H%M%S")
         output_dir.mkdir(parents=True, exist_ok=True)
         annotations = payload.get("annotation", {}).get("image_annotations", [])
         issues = payload.get("result", {}).get("issues", [])
         by_index = {item.get("image_index"): item.get("areas", []) for item in annotations}
         paths = []
         for index, source in enumerate(self.images):
-            image = ImageOps.exif_transpose(Image.open(source)).convert("RGB")
+            with Image.open(source) as source_image:
+                image = ImageOps.exif_transpose(source_image).convert("RGB")
             draw = ImageDraw.Draw(image, "RGBA")
 
             matched_issues = []
@@ -285,7 +288,8 @@ class RoofAnalyzerApp(tk.Tk):
             card = ttk.Frame(self.preview_frame, padding=6)
             card.grid(row=index // 2, column=index % 2, sticky="nsew")
             try:
-                image = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
+                with Image.open(path) as source_image:
+                    image = ImageOps.exif_transpose(source_image).convert("RGB")
                 image.thumbnail(PREVIEW_SIZE)
                 photo = ImageTk.PhotoImage(image)
                 self.preview_refs.append(photo)
@@ -379,8 +383,8 @@ class RoofAnalyzerApp(tk.Tk):
                 Spacer(1, 0.25*cm),
             ]
             for index, path in enumerate(self.annotated_paths, 1):
-                img = Image.open(path)
-                ratio = min(16*cm / img.width, 20*cm / img.height)
+                with Image.open(path) as img:
+                    ratio = min(16*cm / img.width, 20*cm / img.height)
                 story += [
                     Paragraph(f"Imagem {index} — áreas identificadas", styles["Heading3"]),
                     Spacer(1, 0.12*cm),
@@ -390,5 +394,10 @@ class RoofAnalyzerApp(tk.Tk):
         doc.build(story)
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Inicia a interface gráfica do aplicativo."""
     RoofAnalyzerApp().mainloop()
+
+
+if __name__ == "__main__":
+    main()
